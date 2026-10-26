@@ -135,12 +135,27 @@
       </div>
       <p class="hint" id="installHint" hidden>iPhone 要先用 Safari 的「分享 → 加入主畫面」，從主畫面打開才能收到通知。</p>
 
-      <h3>資料</h3>
+      <h3>資料備份</h3>
+      <p class="hint" id="backupStatus"></p>
       <div class="rows">
-        <div class="row">備份 <span class="row-actions"><button class="btn small" id="exportBtn">匯出</button><button class="btn small" id="importBtn">匯入</button></span></div>
+        <div class="row">備份序號 <button class="btn small" id="copyCodeBtn">取得序號</button></div>
+        <div class="row">用序號還原 <button class="btn small" id="restoreCodeBtn">輸入序號</button></div>
+        <div class="row">備份檔 <span class="row-actions"><button class="btn small" id="exportBtn">匯出</button><button class="btn small" id="importBtn">匯入</button></span></div>
         <div class="row">清除所有資料 <button class="btn small danger" id="resetBtn">清除</button></div>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </dialog>
+
+  <!-- 備份序號 -->
+  <dialog class="sheet" id="codeDialog">
+    <h2 id="codeTitle"></h2>
+    <p class="code-hint" id="codeHint"></p>
+    <textarea id="codeText" rows="6" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+    <div class="code-actions">
+      <button class="btn ghost-dark" data-close>取消</button>
+      <button class="btn ghost-dark" id="codeShare" hidden>分享</button>
+      <button class="btn primary" id="codeAction"></button>
     </div>
   </dialog>
 

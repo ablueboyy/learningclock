@@ -1,4 +1,4 @@
-import { load, save, exportData, importData, resetData } from './store.js';
+import { load, save, exportData, importData, resetData, encodeSave, decodeSave } from './store.js';
 import { loadDex, species, allSpecies, draw, gainExp, expNeeded, spriteUrl, iconUrl, RARITY } from './pokemon.js';
 import { Field } from './field.js';
 import { unlockAudio, chime, vibrate, notifyStatus, requestNotify, notify, keepAwake } from './notify.js';
@@ -130,6 +130,8 @@ async function finishFocus() {
   for (const e of evolutions) await showEvolution(e);
   field.sync(state.mons);
   field.celebrate();
+  const unsaved = state.mons.length - state.backup.count;
+  if (unsaved > 0 && unsaved % 5 === 0) toast(`已經有 ${unsaved} 隻夥伴還沒備份，到「設定」取得序號吧`);
   render();
   busy = false;
 
@@ -390,6 +392,25 @@ function renderSettings() {
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   $('installHint').hidden = !(ios && !standalone);
+  renderBackupStatus();
+}
+
+async function renderBackupStatus() {
+  const { at, count } = state.backup;
+  const unsaved = state.mons.length - count;
+  let text = at
+    ? `上次備份：${new Date(at).toLocaleDateString('zh-TW')}${unsaved > 0 ? `，之後又多了 ${unsaved} 隻` : '，目前是最新的'}。`
+    : '還沒備份過。';
+  const persisted = await navigator.storage?.persisted?.();
+  text += persisted ? '瀏覽器已同意不自動清除資料。' : '把網頁加到主畫面可以降低資料被清掉的機率。';
+  text += '序號請存在手機以外的地方（傳給自己、記事本、雲端），換手機也能還原。';
+  $('backupStatus').textContent = text;
+}
+
+function markBackup() {
+  state.backup = { at: Date.now(), count: state.mons.length };
+  persist();
+  renderBackupStatus();
 }
 
 function renderNotifyBtn() {
@@ -427,6 +448,75 @@ $('exportBtn').addEventListener('click', () => {
   a.download = `pomomon-backup-${dayKey()}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+  markBackup();
+});
+
+// 同一個對話框：mode = 'copy' 顯示序號；'restore' 讓使用者貼上
+let codeMode = 'copy';
+
+function openCodeDialog(mode, code = '') {
+  codeMode = mode;
+  const copy = mode === 'copy';
+  $('codeTitle').textContent = copy ? '你的備份序號' : '用序號還原';
+  $('codeHint').textContent = copy
+    ? `包含 ${state.mons.length} 隻寶可夢、圖鑑和紀錄。複製後傳給自己或存到記事本，換手機時貼回來就能還原。`
+    : '把之前存的序號整段貼上。還原後目前的資料會被取代。';
+  $('codeText').value = code;
+  $('codeText').readOnly = copy;
+  $('codeText').placeholder = copy ? '' : 'PKMN1-…';
+  $('codeAction').textContent = copy ? '複製' : '還原';
+  $('codeShare').hidden = !(copy && navigator.share);
+  $('codeDialog').showModal();
+  if (!copy) $('codeText').focus();
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // 舊瀏覽器：選取後用 execCommand
+    $('codeText').select();
+    return document.execCommand?.('copy') ?? false;
+  }
+}
+
+$('copyCodeBtn').addEventListener('click', async () => {
+  openCodeDialog('copy', await encodeSave(state));
+});
+
+$('restoreCodeBtn').addEventListener('click', () => openCodeDialog('restore'));
+
+$('codeShare').addEventListener('click', async () => {
+  try {
+    await navigator.share({ title: '寶可夢專注鐘 備份序號', text: $('codeText').value });
+    markBackup();
+    $('codeDialog').close();
+  } catch {}
+});
+
+$('codeAction').addEventListener('click', async () => {
+  const code = $('codeText').value;
+  if (codeMode === 'copy') {
+    if (await copyText(code)) {
+      markBackup();
+      $('codeDialog').close();
+      toast('已複製序號，記得貼到安全的地方保存');
+    } else {
+      $('codeText').select();
+      toast('沒辦法自動複製，請長按文字手動複製');
+    }
+    return;
+  }
+  try {
+    const next = await decodeSave(code);
+    if (!confirm(`序號裡有 ${next.mons.length} 隻寶可夢。要用它取代目前的資料嗎？`)) return;
+    state = next;
+    persist();
+    location.reload();
+  } catch (err) {
+    toast(`還原失敗：${err.message}`);
+  }
 });
 
 $('importBtn').addEventListener('click', () => $('importFile').click());
@@ -506,3 +596,5 @@ render();
 setInterval(tick, 250);
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+// 請瀏覽器不要在空間不足時清掉存檔
+navigator.storage?.persist?.().catch(() => {});

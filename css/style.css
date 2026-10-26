@@ -172,7 +172,7 @@ body[data-mode="focus"] .stars { opacity: 0.8; animation: twinkle 4s ease-in-out
 .btn:disabled { opacity: 0.4; cursor: default; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 0 #b83a37; }
 .btn.ghost { background: rgba(255, 255, 255, 0.12); border: 1.5px solid currentColor; color: var(--ink-soft); }
-.btn.small { padding: 7px 16px; font-size: 14px; background: var(--surface-2); color: var(--ink); }
+.btn.small { padding: 7px 16px; font-size: 14px; background: var(--surface); color: #1d2b3a; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
 .btn.small.danger { color: var(--r-mythic); }
 
 /* ---------- 草地 ---------- */
@@ -576,6 +576,26 @@ dialog.center .btn { margin-top: 8px; min-width: 160px; }
 }
 .row input[type="checkbox"] { width: 22px; height: 22px; accent-color: #4c9f55; }
 .row-actions { display: flex; gap: 6px; }
+
+/* 備份序號 */
+#codeDialog h2 { margin: 0 0 6px; font-size: 20px; }
+.code-hint { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: #6b7a88; }
+#codeDialog textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: #1d2b3a;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+  resize: vertical;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.code-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.code-actions .btn { padding: 11px 20px; }
+.btn.ghost-dark { background: var(--surface-2); color: #1d2b3a; }
 
 /* 提示 */
 .toast {
