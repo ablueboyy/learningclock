@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#8fd3ff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="寶可夢專注">
+  <title>寶可夢專注鐘</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-mode="idle">
+  <div class="stars" aria-hidden="true"></div>
+
+  <main class="app">
+    <section class="panel">
+      <div class="mode-label" id="modeLabel">準備好了嗎？</div>
+      <div class="clock">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-bg" cx="60" cy="60" r="54" />
+          <circle class="ring-fg" id="ring" cx="60" cy="60" r="54" />
+        </svg>
+        <div class="clock-text">
+          <div class="time" id="time">25:00</div>
+          <div class="sub" id="sub"></div>
+        </div>
+      </div>
+      <div class="quota" id="quota" hidden></div>
+      <div class="controls">
+        <button class="btn primary" id="mainBtn">開始專注</button>
+        <button class="btn ghost" id="altBtn" hidden>放棄這次</button>
+      </div>
+    </section>
+
+    <section class="field" id="field">
+      <p class="field-empty" id="fieldEmpty">完成第一次專注<br>就能獲得第一隻寶可夢！</p>
+    </section>
+
+    <nav class="dock">
+      <button class="dock-btn" id="openCollection">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h6m6 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>夥伴 <b id="monCount">0</b></span>
+      </button>
+      <button class="dock-btn" id="openSettings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10m4 0h2M4 17h4m4 0h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        <span>設定</span>
+      </button>
+    </nav>
+  </main>
+
+  <!-- 抽到新寶可夢 -->
+  <dialog class="sheet center" id="reward">
+    <p class="eyebrow">專注完成！</p>
+    <div class="stage" id="rewardStage">
+      <div class="ball"></div>
+      <div class="glow"></div>
+      <img class="reveal-img" id="rewardImg" alt="" crossorigin="anonymous">
+    </div>
+    <div class="reveal-info" id="rewardInfo"></div>
+    <button class="btn primary" id="rewardOk" disabled>收下</button>
+  </dialog>
+
+  <!-- 進化 -->
+  <dialog class="sheet center" id="evolve">
+    <p class="eyebrow">咦？</p>
+    <div class="stage">
+      <img class="evo-img" id="evoImg" alt="" crossorigin="anonymous">
+    </div>
+    <div class="reveal-info" id="evoInfo"></div>
+    <button class="btn primary" id="evoOk" disabled>好耶！</button>
+  </dialog>
+
+  <!-- 失敗 -->
+  <dialog class="sheet center" id="fail">
+    <p class="eyebrow">專注中斷</p>
+    <div class="stage small">
+      <img class="sad" alt="" crossorigin="anonymous"
+        src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/54.gif">
+    </div>
+    <p class="fail-reason" id="failReason"></p>
+    <button class="btn primary" id="failOk">再試一次</button>
+  </dialog>
+
+  <!-- 夥伴 / 圖鑑 -->
+  <dialog class="sheet full" id="collection">
+    <header class="sheet-head">
+      <div class="tabs" role="tablist">
+        <button role="tab" class="tab" data-tab="party" aria-selected="true">我的夥伴</button>
+        <button role="tab" class="tab" data-tab="dex" aria-selected="false">圖鑑 <span id="dexCount"></span></button>
+      </div>
+      <button class="icon-btn close" data-close aria-label="關閉">✕</button>
+    </header>
+    <p class="hint" id="partyHint"></p>
+    <div class="gen-chips" id="genChips" hidden></div>
+    <div class="sheet-body">
+      <ul class="party" id="party"></ul>
+      <ul class="dex" id="dex" hidden></ul>
+    </div>
+  </dialog>
+
+  <!-- 設定 -->
+  <dialog class="sheet full" id="settings">
+    <header class="sheet-head">
+      <h2>設定</h2>
+      <button class="icon-btn close" data-close aria-label="關閉">✕</button>
+    </header>
+    <div class="sheet-body">
+      <div class="stats" id="stats"></div>
+
+      <h3>時間（分鐘）</h3>
+      <div class="rows">
+        <label class="row">專注<input type="number" inputmode="numeric" data-setting="focusMin" min="1" max="120"></label>
+        <label class="row">短休息<input type="number" inputmode="numeric" data-setting="shortMin" min="1" max="60"></label>
+        <label class="row">長休息<input type="number" inputmode="numeric" data-setting="longMin" min="1" max="60"></label>
+        <label class="row">每幾輪長休息<input type="number" inputmode="numeric" data-setting="longEvery" min="2" max="10"></label>
+      </div>
+      <p class="hint">每 10 分鐘專注可以切出 App 一次（每次最多 3 分鐘），超過就算失敗。</p>
+
+      <h3>畫面</h3>
+      <div class="rows">
+        <label class="row">草地上最多幾隻<input type="number" inputmode="numeric" data-setting="fieldMax" min="1" max="6"></label>
+        <label class="row">專注完自動開始休息<input type="checkbox" data-setting="autoBreak"></label>
+        <label class="row">保持螢幕常亮<input type="checkbox" data-setting="wakeLock"></label>
+        <label class="row">音效<input type="checkbox" data-setting="sound"></label>
+      </div>
+
+      <h3>通知</h3>
+      <div class="rows">
+        <div class="row">系統通知 <button class="btn small" id="notifyBtn"></button></div>
+      </div>
+      <p class="hint" id="installHint" hidden>iPhone 要先用 Safari 的「分享 → 加入主畫面」，從主畫面打開才能收到通知。</p>
+
+      <h3>資料</h3>
+      <div class="rows">
+        <div class="row">備份 <span class="row-actions"><button class="btn small" id="exportBtn">匯出</button><button class="btn small" id="importBtn">匯入</button></span></div>
+        <div class="row">清除所有資料 <button class="btn small danger" id="resetBtn">清除</button></div>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
