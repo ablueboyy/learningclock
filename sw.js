@@ -1,5 +1,5 @@
 // 離線快取：程式本體用 network-first，寶可夢圖片用 cache-first
-const SHELL_CACHE = 'pomomon-shell-v4';
+const SHELL_CACHE = 'pomomon-shell-v5';
 const SPRITE_CACHE = 'pomomon-sprites-v1';
 const SHELL = [
   './',

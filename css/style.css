@@ -95,6 +95,8 @@ body[data-mode="focus"] .stars { opacity: 0.8; animation: twinkle 4s ease-in-out
 /* ---------- 計時面板 ---------- */
 
 .panel {
+  position: relative;
+  z-index: 2; /* 寶可夢的頭可以伸到天空，但不要擋到按鈕 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -177,12 +179,18 @@ body[data-mode="focus"] .stars { opacity: 0.8; animation: twinkle 4s ease-in-out
 
 /* ---------- 草地 ---------- */
 
+/* 草地本身不裁切內容，背景畫在 ::before，寶可夢的頭才不會被天空蓋住 */
 .field {
   position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   margin-top: 20px;
-  overflow: hidden;
+}
+.field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   border-radius: 50% 50% 0 0 / 46px 46px 0 0;
   background:
     radial-gradient(14px 6px at 18% 30%, var(--grass-tuft) 50%, transparent 52%),
@@ -212,7 +220,23 @@ body[data-mode="focus"] .stars { opacity: 0.8; animation: twinkle 4s ease-in-out
   top: 0;
   width: 0;
   height: 0;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+}
+.walker.held { cursor: grabbing; }
+
+/* 影子留在地上，抓起來時變小變淡 */
+.walker::before {
+  content: "";
+  position: absolute;
+  left: -23px;
+  top: -6px;
+  width: 46px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.18);
+  transform: scale(var(--shadow, 1));
+  opacity: var(--shadow, 1);
 }
 
 .walker-body {
@@ -225,14 +249,6 @@ body[data-mode="focus"] .stars { opacity: 0.8; animation: twinkle 4s ease-in-out
   align-items: center;
 }
 
-.walker-body::after {
-  content: "";
-  width: 46px;
-  height: 10px;
-  margin-top: -8px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.18);
-}
 
 .walker img {
   display: block;
@@ -243,6 +259,29 @@ body[data-mode="focus"] .stars { opacity: 0.8; animation: twinkle 4s ease-in-out
 
 .walker.walking img { animation: bob 0.5s ease-in-out infinite alternate; }
 @keyframes bob { to { translate: 0 -2px; } }
+.walker.held img { animation: wiggle 0.25s ease-in-out infinite alternate; }
+@keyframes wiggle { from { rotate: -6deg; } to { rotate: 6deg; } }
+.walker.dizzy img { animation: woozy 0.9s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes woozy { 0%, 100% { rotate: -9deg; } 50% { rotate: 9deg; } }
+
+.emote {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  min-width: 30px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: #1d2b3a;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  animation: emote-pop 0.35s cubic-bezier(0.3, 1.8, 0.5, 1);
+}
+@keyframes emote-pop { from { transform: translateY(8px) scale(0.3); opacity: 0; } }
+.walker.dizzy .emote { animation: emote-pop 0.35s, spin 1s linear infinite; }
+@keyframes spin { to { rotate: 360deg; } }
 
 .bubble {
   position: absolute;

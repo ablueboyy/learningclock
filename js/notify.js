@@ -34,6 +34,16 @@ export function chime(kind) {
   });
 }
 
+// 寶可夢叫聲（PokeAPI cries，.ogg；iPhone 舊版 Safari 不支援就安靜跳過）
+const CRIES = 'https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest';
+export function cry(id) {
+  try {
+    const audio = new Audio(`${CRIES}/${id}.ogg`);
+    audio.volume = 0.35;
+    audio.play().catch(() => {});
+  } catch {}
+}
+
 export function vibrate(pattern) {
   navigator.vibrate?.(pattern);
 }

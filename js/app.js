@@ -8,7 +8,7 @@ import {
 } from './sync.js';
 import { loadDex, species, allSpecies, draw, gainExp, expNeeded, spriteUrl, iconUrl, RARITY } from './pokemon.js';
 import { Field } from './field.js';
-import { unlockAudio, chime, vibrate, notifyStatus, requestNotify, notify, keepAwake } from './notify.js';
+import { unlockAudio, chime, cry, vibrate, notifyStatus, requestNotify, notify, keepAwake } from './notify.js';
 
 const AWAY_LIMIT = 3 * 60_000; // 單次切出最多 3 分鐘
 const AWAY_GRACE = 3_000; // 3 秒內的切換不算
@@ -24,7 +24,7 @@ const $ = (id) => document.getElementById(id);
 let state = load();
 await loadDex();
 
-const field = new Field($('field'), onTapMon);
+const field = new Field($('field'), { onTap: onTapMon, onGrab: onGrabMon });
 let busy = false; // 正在跑完成/失敗流程
 
 let user = null; // 已登入的帳號
@@ -264,6 +264,12 @@ function render() {
 
   $('monCount').textContent = state.mons.length;
   $('fieldEmpty').hidden = state.mons.length > 0;
+}
+
+function onGrabMon(uid) {
+  const m = state.mons.find((x) => x.uid === uid);
+  if (m && state.settings.sound) cry(m.speciesId);
+  vibrate(15);
 }
 
 function onTapMon(uid) {
