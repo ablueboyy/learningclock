@@ -1,4 +1,11 @@
-import { load, save, exportData, importData, resetData, encodeSave, decodeSave } from './store.js';
+import {
+  load, save, exportData, importData, resetData, encodeSave, decodeSave,
+  syncable, joinSaves, sameSave, hasExtraMons, parseRemote,
+} from './store.js';
+import {
+  syncAvailable, startSync, schedulePush, pushNow, markRemote,
+  signUp, signIn, signOut, resetPassword, authMessage,
+} from './sync.js';
 import { loadDex, species, allSpecies, draw, gainExp, expNeeded, spriteUrl, iconUrl, RARITY } from './pokemon.js';
 import { Field } from './field.js';
 import { unlockAudio, chime, vibrate, notifyStatus, requestNotify, notify, keepAwake } from './notify.js';
@@ -9,14 +16,29 @@ const RING = 2 * Math.PI * 54;
 // 網址加 ?dev 時一分鐘只算一秒，方便測試
 const MINUTE = new URLSearchParams(location.search).has('dev') ? 1000 : 60_000;
 
+const LINK_KEY = 'pomomon-sync'; // 這台裝置的資料已經跟哪個帳號合併過
+const BEFORE_LINK_KEY = 'pomomon-before-sync'; // 選「只用帳號的資料」前，保留一份這台原本的存檔
+
 const $ = (id) => document.getElementById(id);
-const persist = () => save(state);
 
 let state = load();
 await loadDex();
 
 const field = new Field($('field'), onTapMon);
 let busy = false; // 正在跑完成/失敗流程
+
+let user = null; // 已登入的帳號
+let linked = false; // 這台的資料已經和帳號合併，可以自動同步
+let linking = false;
+let pendingRemote = null; // 獎勵動畫期間收到的雲端資料，結束後再套用
+
+const toJson = (s) => JSON.stringify(syncable(s));
+const mergeJson = (remoteJson, localJson) => toJson(joinSaves(parseRemote(localJson), parseRemote(remoteJson)));
+
+function persist() {
+  save(state);
+  if (user && linked) schedulePush(user.uid, toJson(state), mergeJson);
+}
 
 // ---------- 小工具 ----------
 
@@ -82,6 +104,11 @@ function startTimer(mode) {
 }
 
 function tick() {
+  if (!busy && pendingRemote) {
+    const [json, u] = pendingRemote;
+    pendingRemote = null;
+    onRemote(json, u);
+  }
   const t = state.timer;
   if (t && !busy && Date.now() >= t.endAt) {
     if (t.mode === 'focus') finishFocus();
@@ -348,6 +375,7 @@ $('party').addEventListener('change', (e) => {
     return;
   }
   m.onField = input.checked;
+  m.at = Date.now();
   persist();
   field.sync(state.mons);
   $('partyHint').textContent = `草地上 ${fieldCount()} / ${state.settings.fieldMax} 隻，點開關換上場的夥伴`;
@@ -430,6 +458,7 @@ document.querySelectorAll('[data-setting]').forEach((input) => {
       state.settings[key] = v;
       input.value = v;
     }
+    state.settingsAt = Date.now();
     persist();
     if (key === 'wakeLock') keepAwake(state.settings.wakeLock);
     render();
@@ -535,11 +564,166 @@ $('importFile').addEventListener('change', async (e) => {
   }
 });
 
-$('resetBtn').addEventListener('click', () => {
-  if (!confirm('真的要清除所有寶可夢和紀錄嗎？這無法復原。')) return;
-  if (!confirm('再確認一次：全部清除？')) return;
+$('resetBtn').addEventListener('click', async () => {
+  const msg = user
+    ? '要清除這台裝置上的資料並登出嗎？帳號裡的寶可夢不會被刪除，重新登入就會回來。'
+    : '真的要清除所有寶可夢和紀錄嗎？這無法復原。';
+  if (!confirm(msg)) return;
+  if (!user && !confirm('再確認一次：全部清除？')) return;
+  if (user) await signOut();
+  try {
+    localStorage.removeItem(LINK_KEY);
+  } catch {}
   resetData();
   location.reload();
+});
+
+// ---------- 帳號同步 ----------
+
+function applyState(next) {
+  state = { ...next, timer: state.timer };
+  save(state);
+  field.sync(state.mons);
+  render();
+}
+
+function onUser(u) {
+  user = u;
+  let linkedUid = null;
+  try {
+    linkedUid = localStorage.getItem(LINK_KEY);
+  } catch {}
+  linked = Boolean(u) && linkedUid === u.uid;
+  setSyncStatus(u ? 'syncing' : '');
+  renderAccount();
+}
+
+function onRemote(json, u) {
+  if (!user || u.uid !== user.uid) return;
+  if (busy) {
+    pendingRemote = [json, u];
+    return;
+  }
+  if (!linked) {
+    linkAccount(json, u);
+    return;
+  }
+  if (json == null) {
+    // 雲端還是空的（例如被刪掉了），把這台的資料傳上去
+    pushNow(u.uid, toJson(state), mergeJson).catch(() => setSyncStatus('error'));
+    return;
+  }
+  markRemote(json);
+  const remote = parseRemote(json);
+  const merged = joinSaves(state, remote);
+  if (!sameSave(merged, state)) applyState(merged);
+  if (!sameSave(merged, remote)) schedulePush(u.uid, toJson(merged), mergeJson);
+}
+
+// 第一次在這台登入：決定這台原有的資料要怎麼繼承
+async function linkAccount(json, u) {
+  if (linking) return;
+  linking = true;
+  const remote = json ? parseRemote(json) : null;
+  let next;
+  if (!remote) {
+    next = state;
+    if (state.mons.length) toast(`已把這台的 ${state.mons.length} 隻寶可夢繼承到帳號`);
+  } else if (!hasExtraMons(state, remote)) {
+    // 這台沒有帳號裡沒有的寶可夢，直接合併就好
+    next = joinSaves(state, remote);
+    toast(`已載入帳號裡的 ${remote.mons.length} 隻寶可夢`);
+  } else {
+    $('inheritText').textContent =
+      `這台裝置有 ${state.mons.length} 隻寶可夢，帳號裡有 ${remote.mons.length} 隻。` +
+      '合併會保留兩邊所有的寶可夢；只用帳號的資料，這台原本的寶可夢會被取代。';
+    await openDialog($('inherit'));
+    if ($('inherit').returnValue === 'cloud') {
+      try {
+        localStorage.setItem(BEFORE_LINK_KEY, JSON.stringify(state));
+      } catch {}
+      next = remote;
+      toast('已換成帳號裡的資料');
+    } else {
+      next = joinSaves(state, remote);
+      toast(`合併完成，現在一共有 ${next.mons.length} 隻寶可夢`);
+    }
+  }
+  try {
+    localStorage.setItem(LINK_KEY, u.uid);
+  } catch {}
+  linked = true;
+  linking = false;
+  applyState(next);
+  try {
+    await pushNow(u.uid, toJson(state), mergeJson);
+  } catch {
+    setSyncStatus('error');
+  }
+}
+
+let syncStatus = '';
+function setSyncStatus(status) {
+  syncStatus = status;
+  const label = {
+    syncing: '同步中…',
+    synced: '已同步 ✓',
+    offline: '離線中，連上網路後會自動同步',
+    error: '同步失敗，稍後會再試',
+  }[status] ?? '';
+  $('syncStatus').textContent = label;
+  $('syncStatus').dataset.status = status;
+}
+
+function renderAccount() {
+  $('accountSection').hidden = !syncAvailable();
+  $('accountOut').hidden = Boolean(user);
+  $('accountIn').hidden = !user;
+  if (user) $('accountEmail').textContent = user.email;
+}
+
+async function authAction(fn, btn) {
+  const email = $('authEmail').value.trim();
+  const password = $('authPassword').value;
+  if (!email) {
+    toast('請輸入 Email');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await fn(email, password);
+    $('authPassword').value = '';
+  } catch (err) {
+    toast(authMessage(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('signInBtn').addEventListener('click', (e) => authAction(signIn, e.currentTarget));
+$('signUpBtn').addEventListener('click', (e) => authAction(signUp, e.currentTarget));
+$('signOutBtn').addEventListener('click', async () => {
+  if (!confirm('要登出嗎？這台的寶可夢會留著，但不會再自動同步。')) return;
+  await signOut();
+  toast('已登出');
+});
+$('forgotBtn').addEventListener('click', async () => {
+  const email = $('authEmail').value.trim();
+  if (!email) {
+    toast('先在上面輸入你的 Email');
+    return;
+  }
+  try {
+    await resetPassword(email);
+    toast('已寄出重設密碼的信，請到信箱查看');
+  } catch (err) {
+    toast(authMessage(err));
+  }
+});
+$('inherit').addEventListener('cancel', (e) => e.preventDefault());
+
+window.addEventListener('online', () => {
+  if (user && linked) schedulePush(user.uid, toJson(state), mergeJson);
 });
 
 // ---------- 按鈕 ----------
@@ -598,3 +782,8 @@ setInterval(tick, 250);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 // 請瀏覽器不要在空間不足時清掉存檔
 navigator.storage?.persist?.().catch(() => {});
+
+renderAccount();
+if (syncAvailable()) {
+  startSync({ onUser, onRemote, onStatus: setSyncStatus }).catch(() => setSyncStatus('error'));
+}

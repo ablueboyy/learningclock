@@ -1,5 +1,5 @@
 // 存檔：全部放在 localStorage，另外可以轉成備份序號
-import { RARITY } from './pokemon.js';
+import { RARITY, species } from './pokemon.js';
 
 const KEY = 'pomomon-v1';
 
@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS = {
 function fresh() {
   return {
     settings: { ...DEFAULT_SETTINGS },
+    settingsAt: 0, // 設定最後修改時間，同步時新的贏
     mons: [],
     seen: [],
     stats: { sessions: 0, focusMinutes: 0, fails: 0, streak: 0, lastDay: null, today: 0, todayDay: null, cycle: 0 },
@@ -146,4 +147,70 @@ export function resetData() {
   try {
     localStorage.removeItem(KEY);
   } catch {}
+}
+
+// ---------- 雲端同步用的合併 ----------
+// 兩份存檔合併時只會「變多」：寶可夢依 uid 取聯集、圖鑑取聯集、統計取較大值。
+// 所以不管哪台裝置先上傳，合併結果都一樣，也不會把另一台的寶可夢蓋掉。
+
+export function syncable(state) {
+  const { timer, ...rest } = state;
+  return rest;
+}
+
+const progress = (m) => (species(m.speciesId)?.stage ?? 1) * 100 + m.exp;
+const dayNum = (key) => {
+  if (!key) return 0;
+  const [y, m, d] = key.split('-').map(Number);
+  return y * 10000 + m * 100 + d;
+};
+
+export function joinSaves(a, b) {
+  const mons = new Map();
+  for (const m of [...a.mons, ...b.mons]) {
+    const cur = mons.get(m.uid);
+    // 進化/經驗較多的贏；一樣時看誰比較晚改（例如換上場）
+    if (!cur || progress(m) > progress(cur) || (progress(m) === progress(cur) && (m.at ?? 0) > (cur.at ?? 0))) {
+      mons.set(m.uid, m);
+    }
+  }
+
+  const sa = a.stats;
+  const sb = b.stats;
+  const later = (key) => (dayNum(sb[key]) > dayNum(sa[key]) ? sb : sa);
+  const streakSide = later('lastDay');
+  const todaySide = later('todayDay');
+  const sameToday = sa.todayDay === sb.todayDay;
+
+  return merge({
+    settings: (b.settingsAt ?? 0) > (a.settingsAt ?? 0) ? b.settings : a.settings,
+    settingsAt: Math.max(a.settingsAt ?? 0, b.settingsAt ?? 0),
+    mons: [...mons.values()].sort((x, y) => x.caughtAt - y.caughtAt),
+    seen: [...new Set([...a.seen, ...b.seen])].sort((x, y) => x - y),
+    stats: {
+      sessions: Math.max(sa.sessions, sb.sessions),
+      focusMinutes: Math.max(sa.focusMinutes, sb.focusMinutes),
+      fails: Math.max(sa.fails, sb.fails),
+      cycle: Math.max(sa.cycle, sb.cycle),
+      streak: streakSide.streak,
+      lastDay: streakSide.lastDay,
+      today: sameToday ? Math.max(sa.today, sb.today) : todaySide.today,
+      todayDay: todaySide.todayDay,
+    },
+    backup: (b.backup?.at ?? 0) > (a.backup?.at ?? 0) ? b.backup : a.backup,
+    timer: null,
+  });
+}
+
+// 比較兩份存檔內容是否相同（忽略計時器）
+export const sameSave = (a, b) => JSON.stringify(syncable(a)) === JSON.stringify(syncable(b));
+
+// a 裡有沒有 b 沒有的寶可夢
+export const hasExtraMons = (a, b) => {
+  const ids = new Set(b.mons.map((m) => m.uid));
+  return a.mons.some((m) => !ids.has(m.uid));
+};
+
+export function parseRemote(json) {
+  return merge({ ...JSON.parse(json), timer: null });
 }

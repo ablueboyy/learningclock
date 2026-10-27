@@ -112,6 +112,28 @@
     <div class="sheet-body">
       <div class="stats" id="stats"></div>
 
+      <section id="accountSection" hidden>
+        <h3>帳號同步</h3>
+        <div id="accountOut">
+          <p class="hint">登入後，寶可夢會自動同步到你所有的裝置；這台現有的寶可夢也會一起繼承到帳號。</p>
+          <div class="rows">
+            <label class="row">Email<input type="email" id="authEmail" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="you@example.com"></label>
+            <label class="row">密碼<input type="password" id="authPassword" autocomplete="current-password" placeholder="至少 6 個字元"></label>
+          </div>
+          <div class="auth-actions">
+            <button class="link-btn" id="forgotBtn">忘記密碼？</button>
+            <button class="btn small" id="signUpBtn">註冊</button>
+            <button class="btn small accent" id="signInBtn">登入</button>
+          </div>
+        </div>
+        <div id="accountIn" hidden>
+          <div class="rows">
+            <div class="row"><span class="account-email" id="accountEmail"></span><button class="btn small" id="signOutBtn">登出</button></div>
+            <div class="row">同步狀態<span class="sync-status" id="syncStatus"></span></div>
+          </div>
+        </div>
+      </section>
+
       <h3>時間（分鐘）</h3>
       <div class="rows">
         <label class="row">專注<input type="number" inputmode="numeric" data-setting="focusMin" min="1" max="120"></label>
@@ -145,6 +167,16 @@
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
+  </dialog>
+
+  <!-- 第一次登入時的資料繼承 -->
+  <dialog class="sheet" id="inherit">
+    <h2>要怎麼處理這台的資料？</h2>
+    <p class="code-hint" id="inheritText"></p>
+    <form method="dialog" class="inherit-actions">
+      <button class="btn primary" value="merge">合併兩邊（推薦）</button>
+      <button class="btn ghost-dark" value="cloud">只用帳號裡的資料</button>
+    </form>
   </dialog>
 
   <!-- 備份序號 -->

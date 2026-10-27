@@ -1,5 +1,5 @@
 // 離線快取：程式本體用 network-first，寶可夢圖片用 cache-first
-const SHELL_CACHE = 'pomomon-shell-v3';
+const SHELL_CACHE = 'pomomon-shell-v4';
 const SPRITE_CACHE = 'pomomon-sprites-v1';
 const SHELL = [
   './',
@@ -10,6 +10,8 @@ const SHELL = [
   'js/pokemon.js',
   'js/field.js',
   'js/notify.js',
+  'js/sync.js',
+  'js/firebase-config.js',
   'data/pokedex.json',
   'manifest.webmanifest',
   'icons/icon.svg',
@@ -34,7 +36,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
-  if (url.hostname === 'raw.githubusercontent.com') {
+  // 寶可夢圖片與固定版本的 Firebase SDK 都不會變，直接用快取
+  if (url.hostname === 'raw.githubusercontent.com' || (url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/'))) {
     e.respondWith(
       caches.open(SPRITE_CACHE).then(async (cache) => {
         const hit = await cache.match(e.request);
