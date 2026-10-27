@@ -1,6 +1,4 @@
 rules_version = '2';
-
-// 每個帳號只能讀寫自己的存檔：users/{uid}
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
